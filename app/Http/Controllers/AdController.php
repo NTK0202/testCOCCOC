@@ -10,27 +10,37 @@ use Symfony\Component\HttpFoundation\Response;
 
 class AdController extends Controller
 {
+    /**
+     * Get a list of ads.
+     *
+     * @param  Request  $request
+     * @return JsonResponse
+     */
     public function index(Request $request): JsonResponse
     {
-        $ads = Ad::orderBy($request->get('sort_by', 'created_at'), $request->get('sort_order', 'desc'))
+        $sortBy = $request->get('sort_by', 'created_at');
+        $sortOrder = $request->get('sort_order', 'desc');
+
+        $ads = Ad::orderBy($sortBy, $sortOrder)
+            ->only('id','title','main_picture','price')
             ->paginate(10);
 
         return response()->json([
-            'data' => $ads->map(function (Ad $ad) {
-                return [
-                    'id' => $ad->id,
-                    'title' => $ad->title,
-                    'main_picture' => $ad->pictures[0],
-                    'price' => $ad->price,
-                ];
-            }),
+            'data' => $ads,
             'meta' => [
                 'total' => $ads->total(),
-            ],
+            ]
         ]);
     }
 
-    public function show($id, Request $request): JsonResponse
+    /**
+     * Get a specific ad.
+     *
+     * @param  int  $id
+     * @param  Request  $request
+     * @return JsonResponse
+     */
+    public function show(int $id, Request $request): JsonResponse
     {
         $ad = Ad::findOrFail($id);
 
@@ -42,25 +52,32 @@ class AdController extends Controller
             'main_picture' => $ad->pictures[0],
         ];
 
-        if ($fields && in_array('description', explode(',', $fields))) {
-            $response['description'] = $ad->description;
-        }
+        if ($fields) {
+            $requestedFields = explode(',', $fields);
 
-        if ($fields && in_array('all_pictures_url', explode(',', $fields))) {
-            $response['all_pictures_url'] = $ad->pictures;
+            if (in_array('description', $requestedFields)) {
+                $response['description'] = $ad->description;
+            }
+
+            if (in_array('all_pictures_url', $requestedFields)) {
+                $response['all_pictures_url'] = $ad->pictures;
+            }
         }
 
         return response()->json($response);
     }
 
+    /**
+     * Create a new ad.
+     *
+     * @param  AdRequest  $request
+     * @return JsonResponse
+     */
     public function store(AdRequest $request): JsonResponse
     {
         $ad = new Ad();
 
-        $ad->title = $request->get('title');
-        $ad->description = $request->get('description');
-        $ad->price = $request->get('price');
-        $ad->pictures = $request->get('pictures');
+        $ad->fill($request->validated());
 
         if ($ad->save()) {
             return response()->json([
